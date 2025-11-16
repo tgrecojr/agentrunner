@@ -21,7 +21,7 @@ This document provides detailed technical specifications for the Multi-Agent Orc
 - **Task Queue**: Celery 5.3+ with Celery Beat
 - **Cache**: Redis 7.0+
 - **Database**: PostgreSQL 15+
-- **Monitoring**: Prometheus + Grafana
+- **Logging**: Python stdlib logging (JSON to stdout)
 - **Web Framework**: FastAPI (for health endpoints and SlackGateway)
 - **ORM**: SQLAlchemy 2.0+
 - **Async Support**: asyncio, aiohttp, celery with async workers
@@ -44,8 +44,7 @@ class AgentOrchestrator:
     """
 
     def __init__(self, config_service: ConfigurationService,
-                 state_manager: StateManager,
-                 monitoring_collector: MonitoringCollector):
+                 state_manager: StateManager):
         """Initialize orchestrator with dependencies"""
 
     async def initialize(self) -> None:
@@ -118,7 +117,9 @@ class AgentRegistration:
     registered_at: datetime
 ```
 
-**Dependencies**: ConfigurationService, StateManager, MonitoringCollector, Agent Pools
+**Dependencies**: ConfigurationService, StateManager, Agent Pools
+
+**Logging**: Uses Python logging module to emit structured JSON logs to stdout with trace_id
 
 **Configuration**: Loaded via ConfigurationService from `config/orchestrator.yaml`
 
@@ -137,7 +138,7 @@ class EventBus:
     Implements Req 2.2, 2.4, 2.5, 12.5
     """
 
-    def __init__(self, rabbitmq_url: str, monitoring_collector: MonitoringCollector):
+    def __init__(self, rabbitmq_url: str):
         """Initialize RabbitMQ connection with persistent delivery"""
 
     async def connect(self) -> None:
@@ -207,9 +208,11 @@ class Event:
 - **Max Retries**: 5 attempts before dead-letter queue
 - **Prefetch**: Configurable per consumer (default 1 for continuous agents)
 
-**Dependencies**: MonitoringCollector
+**Dependencies**: None (standalone component)
 
 **Configuration**: `RABBITMQ_URL`, `RABBITMQ_USER`, `RABBITMQ_PASS` environment variables
+
+**Logging**: Emits structured logs to stdout with trace_id for all operations
 
 ---
 
@@ -227,8 +230,7 @@ class StateManager:
     """
 
     def __init__(self, redis_client: Redis,
-                 postgres_session: AsyncSession,
-                 monitoring_collector: MonitoringCollector):
+                 postgres_session: AsyncSession):
         """Initialize with Redis and PostgreSQL connections"""
 
     async def save_state(self, key: str, value: dict,
@@ -314,9 +316,11 @@ CREATE TABLE plan_run_states (
 - `agent:conversation:{agent_id}` - Conversation history (TTL: 1 hour)
 - `execution:result:{execution_id}` - Recent execution results (TTL: 24 hours)
 
-**Dependencies**: Redis client, SQLAlchemy AsyncSession, MonitoringCollector
+**Dependencies**: Redis client, SQLAlchemy AsyncSession
 
 **Configuration**: `REDIS_URL`, `POSTGRES_URL` environment variables
+
+**Logging**: Logs cache misses, compression operations, and errors to stdout with trace_id
 
 ---
 
@@ -425,85 +429,89 @@ SLACK_BOT_TOKEN=xoxb-...
 
 ---
 
-### Component: MonitoringCollector
+### Logging Utility
 
-**Purpose**: Aggregates logs, metrics, and traces from all agents and services for observability via Prometheus and Grafana.
+**Purpose**: Provides structured JSON logging with trace IDs for all components.
 
-**Location**: `src/monitoring/monitoring_collector.py`
+**Location**: `src/utils/logger.py`
 
 **Interface**:
 ```python
-class MonitoringCollector:
+import logging
+import json
+import uuid
+from datetime import datetime
+from typing import Optional, Dict, Any
+
+class StructuredLogger:
     """
-    Implements Req 1.3, 1.5, 2.5, 3.5, 5.4, 7.5, 10.1, 10.2, 10.3, 10.4, 10.5
+    Implements Req 10.1, 10.2, 10.3, 10.4
+    Provides structured JSON logging to stdout with trace_id support
     """
 
-    def __init__(self):
-        """Initialize Prometheus metrics and logging"""
+    def __init__(self, component_name: str):
+        """Initialize logger for specific component"""
+        self.component = component_name
+        self.logger = logging.getLogger(component_name)
+        self._setup_json_handler()
 
-    def log_event(self, component: str, level: str,
-                  message: str, trace_id: str,
-                  metadata: dict = None) -> None:
-        """
-        Emit structured JSON log
-        Implements Req 10.1 (structured logging with trace_id)
-        """
+    def _setup_json_handler(self):
+        """Configure JSON formatter for stdout"""
+        handler = logging.StreamHandler()
+        handler.setFormatter(self._json_formatter)
+        self.logger.addHandler(handler)
+        self.logger.setLevel(logging.INFO)
 
-    def record_metric(self, metric_name: str, value: float,
-                     labels: dict = None) -> None:
-        """
-        Record metric for Prometheus
-        Implements Req 10.2
-        """
+    @staticmethod
+    def generate_trace_id() -> str:
+        """Generate new trace ID for request tracking"""
+        return str(uuid.uuid4())
 
-    def log_error(self, component: str, error: Exception,
-                 trace_id: str) -> None:
-        """
-        Log error with stack trace
-        Implements Req 1.3, 5.4, 7.5
-        """
+    def info(self, message: str, trace_id: Optional[str] = None,
+             **metadata) -> None:
+        """Log info level message with trace_id"""
+        self._log("INFO", message, trace_id, metadata)
 
-    def start_trace(self) -> str:
-        """
-        Generate new trace ID for distributed tracing
-        Implements Req 10.3
-        Returns: UUID trace_id
-        """
+    def warning(self, message: str, trace_id: Optional[str] = None,
+                **metadata) -> None:
+        """Log warning level message with trace_id"""
+        self._log("WARNING", message, trace_id, metadata)
 
-    def trigger_alert(self, alert_name: str, severity: str,
-                     message: str) -> None:
-        """
-        Trigger alert based on thresholds
-        Implements Req 10.5 (e.g., >5 failures in 5 minutes)
-        """
-```
+    def error(self, message: str, trace_id: Optional[str] = None,
+              error: Optional[Exception] = None, **metadata) -> None:
+        """Log error level message with trace_id and optional exception"""
+        if error:
+            metadata['error_type'] = type(error).__name__
+            metadata['error_message'] = str(error)
+            metadata['stack_trace'] = self._get_stack_trace(error)
+        self._log("ERROR", message, trace_id, metadata)
 
-**Prometheus Metrics**:
-```python
-from prometheus_client import Counter, Histogram, Gauge
+    def _log(self, level: str, message: str,
+             trace_id: Optional[str], metadata: Dict[str, Any]) -> None:
+        """Internal logging method that outputs JSON"""
+        log_entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "level": level,
+            "component": self.component,
+            "message": message,
+            "trace_id": trace_id or "no-trace",
+            **metadata
+        }
+        print(json.dumps(log_entry), flush=True)
 
-# Task metrics (Req 10.2)
-task_duration = Histogram('agent_task_duration_seconds',
-                         'Agent task execution duration',
-                         ['agent_id', 'task_type'])
-
-task_success_count = Counter('agent_task_success_total',
-                            'Successful task completions',
-                            ['agent_id'])
-
-task_failure_count = Counter('agent_task_failure_total',
-                            'Failed task executions',
-                            ['agent_id', 'error_type'])
-
-agent_queue_depth = Gauge('agent_queue_depth',
-                         'Number of pending events in agent queue',
-                         ['agent_id'])
+    @staticmethod
+    def _get_stack_trace(error: Exception) -> str:
+        """Extract stack trace from exception"""
+        import traceback
+        return ''.join(traceback.format_exception(
+            type(error), error, error.__traceback__
+        ))
 ```
 
 **Structured Logging Format**:
 ```json
 {
-  "timestamp": "2025-01-15T10:30:45.123Z",
+  "timestamp": "2025-01-16T10:30:45.123Z",
   "level": "INFO",
   "component": "AutonomousAgentPool",
   "message": "Agent execution completed",
@@ -514,9 +522,27 @@ agent_queue_depth = Gauge('agent_queue_depth',
 }
 ```
 
-**Dependencies**: prometheus_client, Python logging module
+**Usage Example**:
+```python
+from src.utils.logger import StructuredLogger
 
-**Configuration**: Prometheus exposed on port 9090, logs to stdout for Docker capture
+logger = StructuredLogger("AgentOrchestrator")
+trace_id = StructuredLogger.generate_trace_id()
+
+logger.info("Starting agent", trace_id=trace_id, agent_id="sentiment-analyzer")
+try:
+    # ... agent execution ...
+    logger.info("Agent completed", trace_id=trace_id, duration_ms=1234)
+except Exception as e:
+    logger.error("Agent failed", trace_id=trace_id, error=e, agent_id="sentiment-analyzer")
+```
+
+**Dependencies**: Python standard library only (logging, json, uuid, datetime)
+
+**Viewing Logs**:
+- View all logs: `docker-compose logs -f`
+- View specific service: `docker-compose logs -f agent-orchestrator`
+- Filter by trace_id: `docker-compose logs -f | grep "550e8400"`
 
 ---
 
@@ -633,12 +659,11 @@ async def health():
 4. Gateway: slack-gateway
 5. Orchestration: agent-orchestrator
 6. Agents: collaborative-agent-pool, autonomous-agent-pool, continuous-agent-runner
-7. Monitoring: prometheus, grafana
 
 **Networking**: `agent-network` bridge network with DNS-based service discovery
 
 **Volumes**:
-- Named volumes: `postgres-data`, `redis-data`, `rabbitmq-data`, `grafana-data`, `prometheus-data`
+- Named volumes: `postgres-data`, `redis-data`, `rabbitmq-data`
 - Bind mounts: `./config` (read-only), `./logs` (read-write), `./data` (read-write)
 
 **Scaling**: `docker-compose up --scale autonomous-agent-pool=3`
@@ -680,4 +705,4 @@ async def health():
 
 ---
 
-**Design document complete with full specifications for all 10 components, including interfaces, data structures, database schemas, and implementation details.**
+**Design document complete with full specifications for all 9 components plus logging utility, including interfaces, data structures, database schemas, and implementation details. Advanced monitoring (Prometheus/Grafana) deferred to future consideration.**

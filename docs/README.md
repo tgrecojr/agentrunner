@@ -1,6 +1,8 @@
-# Multi-Agent Orchestration Platform - Architecture Specification
+# Multi-Agent Orchestration Platform - Architecture Specification (Simplified)
 
 This directory contains the complete architectural specification for a Python-based multi-agent orchestration system using Portia AI, designed to manage 20+ specialized AI agents with heterogeneous execution patterns.
+
+**Note**: This specification uses simplified logging (structured JSON with trace IDs) instead of Prometheus/Grafana for faster initial implementation. Advanced monitoring infrastructure is documented as a future enhancement.
 
 ## 📚 Document Index
 
@@ -22,9 +24,10 @@ This directory contains the complete architectural specification for a Python-ba
 ### [02 - Requirements Document](./02-requirements.md)
 **Functional and non-functional requirements**
 - 12 core requirements
-- 60 testable acceptance criteria
+- 56 testable acceptance criteria
 - Component mapping for each requirement
 - Support for 4 agent types: collaborative, autonomous, continuous, scheduled
+- Simplified Requirement 10: Basic Logging with Trace IDs (no Prometheus/Grafana)
 
 ### [03 - Detailed Design Document](./03-design.md)
 **Technical specifications for all components**
@@ -34,20 +37,23 @@ This directory contains the complete architectural specification for a Python-ba
 - Docker Compose configuration
 - Portia AI integration patterns
 - Security and performance considerations
+- StructuredLogger utility for trace_id-based logging
 
 ### [04 - Implementation Tasks](./04-tasks.md)
 **Granular implementation plan**
-- 143 actionable tasks organized into 15 phases
+- 125 actionable tasks organized into 15 phases (18 fewer than full monitoring version)
 - 8-week implementation timeline
 - File paths and deliverables for each task
 - Full requirement traceability
 - Dependencies and execution order
+- Simplified logging implementation (no Prometheus/Grafana setup)
 
 ### [05 - Validation Report](./05-validation.md)
 **Traceability and coverage analysis**
-- 100% coverage of all 60 acceptance criteria
+- 100% coverage of all 56 acceptance criteria
 - Complete traceability matrix (requirements → tasks)
 - Component coverage analysis
+- Simplified monitoring approach documented
 - Risk analysis and mitigation strategies
 - Pre-implementation validation checklist
 
@@ -82,7 +88,7 @@ This directory contains the complete architectural specification for a Python-ba
 - ✅ **Configuration-only** agent additions (no code changes required)
 - ✅ **Horizontal scaling** via docker-compose
 - ✅ **State persistence** with crash recovery (Redis + PostgreSQL)
-- ✅ **Complete observability** with Prometheus + Grafana
+- ✅ **Structured logging** with trace IDs for debugging and request correlation
 
 ### Core Components
 1. **AgentOrchestrator** - Lifecycle management and agent registry
@@ -93,21 +99,24 @@ This directory contains the complete architectural specification for a Python-ba
 6. **AutonomousAgentPool** - Independent agent execution
 7. **ContinuousAgentRunner** - Long-running event processors
 8. **StateManager** - Tiered storage (Redis + PostgreSQL)
-9. **MonitoringCollector** - Logs, metrics, and traces
-10. **ConfigurationService** - YAML-based agent definitions
+9. **ConfigurationService** - YAML-based agent definitions
+
+### Utilities
+- **StructuredLogger** - JSON logging to stdout with trace_id support
 
 ---
 
 ## 📊 Specification Statistics
 
 - **Requirements**: 12
-- **Acceptance Criteria**: 60
-- **Implementation Tasks**: 143
-- **Components**: 10
+- **Acceptance Criteria**: 56 (simplified from 60)
+- **Implementation Tasks**: 125 (simplified from 143)
+- **Components**: 9 (plus logging utility)
 - **Integration Tests**: 10
 - **Coverage**: 100%
 - **Estimated Timeline**: 8 weeks
 - **Verified Sources**: 7
+- **Simplification**: Removed Prometheus/Grafana (18 fewer tasks)
 
 ---
 
@@ -121,7 +130,7 @@ This directory contains the complete architectural specification for a Python-ba
 | **Task Queue** | Celery 5.3+ with Beat |
 | **Cache** | Redis 7.0+ |
 | **Database** | PostgreSQL 15+ |
-| **Monitoring** | Prometheus + Grafana |
+| **Logging** | Python stdlib (JSON to stdout) |
 | **Web Framework** | FastAPI |
 | **ORM** | SQLAlchemy 2.0+ |
 | **Deployment** | Docker Compose |
@@ -152,12 +161,14 @@ This directory contains the complete architectural specification for a Python-ba
 
 ## ✅ Validation Status
 
-- [x] All 60 acceptance criteria mapped to tasks
+- [x] All 56 acceptance criteria mapped to tasks
 - [x] Zero missing requirements
 - [x] Zero invalid task references
-- [x] All 10 components fully specified
+- [x] All 9 components fully specified
+- [x] Structured logging with trace_id implemented
 - [x] Docker Compose deployment architecture complete
 - [x] 100% requirement traceability
+- [x] Advanced monitoring (Prometheus/Grafana) documented for future
 - [ ] Implementation (pending)
 - [ ] Testing (pending)
 - [ ] Production deployment (pending)
@@ -242,6 +253,15 @@ For questions or clarifications about this specification:
 
 ---
 
-**Specification Version**: 1.0
+**Specification Version**: 1.1 (Simplified Monitoring)
 **Date**: 2025-01-16
 **Status**: Ready for Implementation ✅
+
+## Changes in Version 1.1
+- Simplified monitoring from Prometheus/Grafana to structured logging with trace IDs
+- Reduced from 10 to 9 core components (MonitoringCollector removed)
+- Reduced from 143 to 125 implementation tasks (18 fewer)
+- Reduced from 60 to 56 acceptance criteria (logging requirements simplified)
+- Added StructuredLogger utility for JSON logging to stdout
+- Documented Prometheus/Grafana as future enhancement
+- Benefits: Faster initial implementation, lower infrastructure complexity, simpler debugging

@@ -28,7 +28,7 @@ This document specifies the functional and non-functional requirements for the M
 
 1.2. WHEN an agent is registered, THE **AgentOrchestrator** SHALL validate that the agent configuration includes required fields (name, type, execution_mode, llm_provider) and reject invalid configurations with descriptive error messages.
 
-1.3. WHEN an agent initialization fails, THE **AgentOrchestrator** SHALL log the failure to the **MonitoringCollector** with error details and mark the agent as unavailable in the registry.
+1.3. WHEN an agent initialization fails, THE **AgentOrchestrator** SHALL log the failure to stdout with error details (including trace_id) and mark the agent as unavailable in the registry.
 
 1.4. WHEN a shutdown signal is received, THE **AgentOrchestrator** SHALL notify all running agents to complete their current tasks within 30 seconds before terminating.
 
@@ -68,7 +68,7 @@ This document specifies the functional and non-functional requirements for the M
 
 3.4. WHEN a scheduled agent execution completes, THE **AgentOrchestrator** SHALL store the execution result and completion timestamp in the **StateManager** for audit trail purposes.
 
-3.5. WHEN a scheduled agent execution exceeds its configured timeout (default 5 minutes), THE **SchedulerService** SHALL cancel the task and publish a timeout event to the **MonitoringCollector**.
+3.5. WHEN a scheduled agent execution exceeds its configured timeout (default 5 minutes), THE **SchedulerService** SHALL cancel the task and log a timeout error to stdout with trace_id.
 
 ---
 
@@ -102,7 +102,7 @@ This document specifies the functional and non-functional requirements for the M
 
 5.3. WHEN an autonomous agent completes execution, THE **AutonomousAgentPool** SHALL store the results in the **StateManager** keyed by `agent_id` and `execution_id` without sharing state with other agents.
 
-5.4. WHEN an autonomous agent fails, THE **AutonomousAgentPool** SHALL log the error to the **MonitoringCollector** and retry execution up to 2 times with fresh context before marking the task as failed.
+5.4. WHEN an autonomous agent fails, THE **AutonomousAgentPool** SHALL log the error to stdout with trace_id and retry execution up to 2 times with fresh context before marking the task as failed.
 
 5.5. WHEN multiple autonomous agents of the same type are available, THE **AutonomousAgentPool** SHALL distribute incoming events using round-robin load balancing across agent instances.
 
@@ -140,7 +140,7 @@ This document specifies the functional and non-functional requirements for the M
 
 7.4. WHEN the system experiences a crash, THE **StateManager** SHALL ensure that all PostgreSQL writes committed before the crash are recoverable on restart with no data loss.
 
-7.5. WHEN Redis becomes unavailable, THE **StateManager** SHALL bypass the cache layer and read/write directly to PostgreSQL while logging cache failures to the **MonitoringCollector**.
+7.5. WHEN Redis becomes unavailable, THE **StateManager** SHALL bypass the cache layer and read/write directly to PostgreSQL while logging cache failures to stdout with trace_id.
 
 ---
 
@@ -180,25 +180,26 @@ This document specifies the functional and non-functional requirements for the M
 
 ---
 
-### Requirement 10: Monitoring and Observability
+### Requirement 10: Basic Logging with Trace IDs
 
-**Description**: The system SHALL collect logs, metrics, and traces from all components and provide dashboards for operational visibility.
+**Description**: The system SHALL emit structured logs to stdout with trace IDs for request correlation and debugging.
 
 #### Acceptance Criteria
 
-10.1. WHEN any component logs an event, THE **MonitoringCollector** SHALL capture structured JSON logs from Docker stdout and index them by timestamp, component, severity, and trace_id for correlation.
+10.1. WHEN any component performs an operation, THE component SHALL emit structured JSON logs to stdout with fields including timestamp, level (INFO/WARNING/ERROR), component name, message, and trace_id.
 
-10.2. WHEN agents execute tasks, THE **MonitoringCollector** SHALL collect metrics including task_duration, task_success_rate, task_failure_count, and agent_queue_depth and expose them via Prometheus `/metrics` endpoint.
+10.2. WHEN a request or event enters the system, THE entry point (SlackGateway, SchedulerService, or EventBus) SHALL generate a unique trace_id (UUID) and include it in the event metadata.
 
-10.3. WHEN a request flows through multiple components, THE **MonitoringCollector** SHALL propagate a distributed trace_id through all logs and metrics to enable end-to-end tracing of agent workflows.
+10.3. WHEN an event flows through multiple components, ALL components SHALL propagate the trace_id from the event metadata through their log messages to enable request correlation.
 
-10.4. WHEN metrics are collected, THE **MonitoringCollector** SHALL make them available to Grafana for real-time visualization with pre-configured dashboards showing agent health, task throughput, and error rates.
-
-10.5. WHEN an agent fails or timeout occurs, THE **MonitoringCollector** SHALL trigger alerts based on configurable thresholds (e.g., >5 failures in 5 minutes) and send notifications to the monitoring dashboard.
+10.4. WHEN viewing logs, DEVELOPERS SHALL be able to use `docker-compose logs -f [service_name]` to view real-time logs and filter by trace_id to follow a specific request through the system.
 
 ---
 
 ### Requirement 11: Docker Compose Deployment
+
+**Note**: Advanced monitoring infrastructure (Prometheus, Grafana, log aggregation) is deferred to future consideration.
+
 
 **Description**: The system SHALL be deployable via docker-compose with service dependencies, health checks, and volume management.
 
@@ -236,4 +237,15 @@ This document specifies the functional and non-functional requirements for the M
 
 ## Summary
 
-This requirements document defines **12 core requirements** with **60 acceptance criteria** mapped to the 10 system components from the architectural blueprint. Each acceptance criterion is testable and references the specific component responsible for implementation.
+This requirements document defines **12 core requirements** with **56 acceptance criteria** mapped to the 9 system components from the architectural blueprint. Each acceptance criterion is testable and references the specific component responsible for implementation.
+
+## Future Considerations
+
+The following capabilities are deferred to future implementation phases:
+- **Centralized Monitoring**: Prometheus metrics collection and Grafana dashboards for real-time visualization
+- **Advanced Alerting**: Threshold-based alerts and notifications for operational issues
+- **Log Aggregation**: Centralized log collection and analysis platforms (ELK stack, Loki, etc.)
+- **Distributed Tracing Systems**: Integration with OpenTelemetry, Jaeger, or Zipkin for advanced tracing
+- **Performance Metrics**: Detailed task duration histograms, queue depth gauges, and success rate counters
+
+For the initial implementation, basic structured logging with trace IDs provides sufficient observability for debugging and request correlation.

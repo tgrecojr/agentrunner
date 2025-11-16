@@ -1,19 +1,18 @@
-# Implementation Plan (Simplified - No Prometheus/Grafana)
+# Implementation Plan
 
 ## Overview
 
-This document provides a granular, actionable implementation plan for the Multi-Agent Orchestration Platform with simplified logging (no Prometheus/Grafana). Tasks are organized by component and include specific file paths, requirement references, and dependencies.
+This document provides a granular, actionable implementation plan for the Multi-Agent Orchestration Platform. Tasks are organized by component and include specific file paths, requirement references, and dependencies.
 
 ## Implementation Strategy
 
 1. **Infrastructure First**: Set up Docker, databases, message broker
 2. **Core Services**: Build ConfigurationService, StateManager, EventBus
-3. **Logging Utility**: Simple structured logging with trace IDs
-4. **Orchestration Layer**: Implement AgentOrchestrator
-5. **Agent Pools**: Build collaborative, autonomous, and continuous agent pools
-6. **Integrations**: Add SlackGateway and SchedulerService
-7. **Deployment**: Finalize docker-compose
-8. **Testing & Validation**: Integration tests and end-to-end validation
+3. **Orchestration Layer**: Implement AgentOrchestrator and monitoring
+4. **Agent Pools**: Build collaborative, autonomous, and continuous agent pools
+5. **Integrations**: Add SlackGateway and SchedulerService
+6. **Deployment**: Finalize docker-compose and monitoring dashboards
+7. **Testing & Validation**: Integration tests and end-to-end validation
 
 ---
 
@@ -22,11 +21,11 @@ This document provides a granular, actionable implementation plan for the Multi-
 - [ ] **1. Project Setup and Infrastructure**
   - [ ] 1.1 Initialize Python project with Poetry/pip requirements file
     - Create `pyproject.toml` or `requirements.txt`
-    - Add dependencies: `portia-sdk-python`, `fastapi`, `celery`, `sqlalchemy`, `redis`, `pika`, `slack-sdk`, `pyyaml`, `pydantic`, `python-dotenv`, `asyncpg`, `aiohttp`
+    - Add dependencies: `portia-sdk-python`, `fastapi`, `celery`, `sqlalchemy`, `redis`, `pika`, `prometheus-client`, `slack-sdk`, `pyyaml`, `pydantic`, `python-dotenv`, `asyncpg`, `aiohttp`
     - _Requirements: All (foundational)_
 
   - [ ] 1.2 Create project directory structure
-    - Create directories: `src/`, `src/orchestrator/`, `src/messaging/`, `src/scheduler/`, `src/integrations/`, `src/agents/`, `src/state/`, `src/config/`, `src/utils/`, `config/agents/`, `logs/`, `data/`, `tests/`
+    - Create directories: `src/`, `src/orchestrator/`, `src/messaging/`, `src/scheduler/`, `src/integrations/`, `src/agents/`, `src/state/`, `src/monitoring/`, `src/config/`, `config/agents/`, `logs/`, `data/`, `tests/`
     - _Requirements: All (foundational)_
 
   - [ ] 1.3 Set up environment configuration
@@ -169,30 +168,52 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Mount config directory as read-only volume
     - _Requirements: 11.1, 11.4_
 
-- [ ] **5. Logging Utility**
-  - [ ] 5.1 Implement StructuredLogger class in `src/utils/logger.py`
-    - Create `StructuredLogger` class with JSON logging to stdout
-    - Implement `generate_trace_id()` static method for UUID generation
-    - Set up JSON formatting for log messages
+- [ ] **5. Monitoring and Observability**
+  - [ ] 5.1 Implement MonitoringCollector class in `src/monitoring/monitoring_collector.py`
+    - Create `MonitoringCollector` class
+    - Initialize Prometheus metrics registry
+    - Set up structured JSON logging to stdout
     - _Requirements: 10.1, 10.2_
 
-  - [ ] 5.2 Implement logging methods
-    - Add `info()`, `warning()`, `error()` methods with trace_id parameter
-    - Implement log formatting with timestamp, level, component, message, trace_id, metadata
-    - Add stack trace extraction for errors
+  - [ ] 5.2 Implement structured logging
+    - Add `log_event()` method with trace_id propagation
+    - Add `log_error()` method with stack trace capture
+    - Implement log formatting with component, level, timestamp, message, metadata
     - _Requirements: 10.1, 10.3_
 
-  - [ ] 5.3 Create logging usage examples and documentation
-    - Document how to initialize logger in each component
-    - Provide examples of trace_id propagation
-    - Add guide for viewing logs with docker-compose
+  - [ ] 5.3 Implement Prometheus metrics
+    - Define metrics: `agent_task_duration_seconds`, `agent_task_success_total`, `agent_task_failure_total`, `agent_queue_depth`
+    - Add `record_metric()` method with label support
+    - Expose `/metrics` endpoint for Prometheus scraping
+    - _Requirements: 10.2_
+
+  - [ ] 5.4 Implement distributed tracing
+    - Add `start_trace()` method generating UUID trace_id
+    - Implement trace_id propagation through Event objects
+    - Add trace correlation in logs and metrics
+    - _Requirements: 10.3_
+
+  - [ ] 5.5 Implement alerting system
+    - Add `trigger_alert()` method with severity levels
+    - Implement threshold-based alerting (e.g., >5 failures in 5 minutes)
+    - Add alert notification to monitoring dashboard
+    - _Requirements: 10.5_
+
+  - [ ] 5.6 Create Prometheus configuration
+    - Create `config/prometheus.yml` with scrape configs for all services
+    - Configure scrape intervals and retention policies
+    - _Requirements: 10.2, 10.4_
+
+  - [ ] 5.7 Create Grafana dashboards
+    - Create `config/grafana/dashboards/agent-overview.json` with agent health metrics
+    - Create dashboard for task throughput and error rates
+    - Add dashboard for queue depth and latency metrics
     - _Requirements: 10.4_
 
 - [ ] **6. Agent Orchestrator**
   - [ ] 6.1 Implement AgentOrchestrator class in `src/orchestrator/agent_orchestrator.py`
-    - Create `AgentOrchestrator` class with dependencies (ConfigService, StateManager)
+    - Create `AgentOrchestrator` class with dependencies (ConfigService, StateManager, MonitoringCollector)
     - Initialize agent registry dictionary
-    - Initialize StructuredLogger for the component
     - _Requirements: 1.1_
 
   - [ ] 6.2 Implement agent registration
@@ -200,8 +221,7 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Add `register_agent()` method with validation
     - Create `AgentMetadata` and `AgentRegistration` dataclasses
     - Implement registry with agent capabilities and execution modes
-    - Log registration events with trace_id
-    - _Requirements: 1.1, 1.2, 1.3, 12.2, 12.4_
+    - _Requirements: 1.1, 1.2, 12.2, 12.4_
 
   - [ ] 6.3 Implement agent startup
     - Add `start_agent()` method to initialize agents
@@ -242,14 +262,12 @@ This document provides a granular, actionable implementation plan for the Multi-
   - [ ] 7.1 Implement CollaborativeAgentPool class in `src/agents/collaborative_agent_pool.py`
     - Create `CollaborativeAgentPool` class
     - Initialize Portia AI PlanningAgent and ExecutionAgent clients
-    - Initialize StructuredLogger for the component
     - _Requirements: 4.1_
 
   - [ ] 7.2 Implement multi-agent plan creation
     - Add `create_execution_plan()` method using Portia AI PlanningAgent
     - Generate plans with role assignments for participating agents
     - Store plan in StateManager
-    - Log plan creation with trace_id
     - _Requirements: 4.1_
 
   - [ ] 7.3 Implement agent initialization for collaboration
@@ -284,15 +302,13 @@ This document provides a granular, actionable implementation plan for the Multi-
   - [ ] 8.1 Implement AutonomousAgentPool class in `src/agents/autonomous_agent_pool.py`
     - Create `AutonomousAgentPool` class
     - Initialize agent instances for each autonomous agent type
-    - Initialize StructuredLogger for the component
     - _Requirements: 5.1_
 
   - [ ] 8.2 Implement isolated execution
     - Add `execute_autonomous_task()` method with isolated context
     - Prevent access to other agents' state
     - Provide Portia AI tools with authentication from ConfigService
-    - Log execution with trace_id
-    - _Requirements: 5.1, 5.2, 5.4_
+    - _Requirements: 5.1, 5.2_
 
   - [ ] 8.3 Implement result persistence
     - Store results in StateManager keyed by `agent_id` and `execution_id`
@@ -302,7 +318,7 @@ This document provides a granular, actionable implementation plan for the Multi-
   - [ ] 8.4 Implement failure handling and retry
     - Add `retry_on_failure()` method with max 2 retries
     - Execute with fresh context on each retry
-    - Log errors with trace_id
+    - Log errors to MonitoringCollector
     - Mark task as failed after exhausting retries
     - _Requirements: 5.4_
 
@@ -321,7 +337,6 @@ This document provides a granular, actionable implementation plan for the Multi-
   - [ ] 9.1 Implement ContinuousAgentRunner class in `src/agents/continuous_agent_runner.py`
     - Create `ContinuousAgentRunner` class
     - Set up event consumption from EventBus with prefetch=1
-    - Initialize StructuredLogger for the component
     - _Requirements: 6.1_
 
   - [ ] 9.2 Implement agent subscription to dedicated queues
@@ -335,7 +350,6 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Load persistent state from StateManager (conversation history, memory)
     - Execute Portia AI agent with event payload
     - Update and persist state incrementally
-    - Log all operations with trace_id
     - _Requirements: 2.3, 6.2, 6.3_
 
   - [ ] 9.4 Implement continuous processing loop
@@ -370,7 +384,6 @@ This document provides a granular, actionable implementation plan for the Multi-
   - [ ] 10.2 Implement SchedulerService class in `src/scheduler/scheduler_service.py`
     - Create `SchedulerService` class
     - Initialize Celery Beat scheduler
-    - Initialize StructuredLogger for the component
     - _Requirements: 3.1_
 
   - [ ] 10.3 Implement schedule registration
@@ -378,8 +391,7 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Add `register_schedule()` method for cron and interval schedules
     - Create `ScheduleConfig` dataclass with cron_expression and interval_seconds
     - Register schedules with Celery Beat
-    - Log schedule registration with trace_id
-    - _Requirements: 3.1, 3.5_
+    - _Requirements: 3.1_
 
   - [ ] 10.4 Implement scheduled task publishing
     - Add `publish_scheduled_task()` method
@@ -388,7 +400,7 @@ This document provides a granular, actionable implementation plan for the Multi-
 
   - [ ] 10.5 Implement timeout handling
     - Add `cancel_timeout()` method for tasks exceeding 5-minute timeout
-    - Log timeout errors with trace_id
+    - Publish timeout event to MonitoringCollector
     - _Requirements: 3.5_
 
   - [ ] 10.6 Create Celery task for agent execution
@@ -405,15 +417,13 @@ This document provides a granular, actionable implementation plan for the Multi-
   - [ ] 11.1 Implement SlackGateway class in `src/integrations/slack_gateway.py`
     - Create `SlackGateway` class with FastAPI app
     - Initialize `slack_sdk.signature.SignatureVerifier` with signing secret
-    - Initialize StructuredLogger for the component
     - _Requirements: 8.1_
 
   - [ ] 11.2 Implement webhook endpoint
     - Create FastAPI POST route `/slack/events`
     - Add `handle_webhook()` method processing incoming requests
     - Return HTTP 200 on success, HTTP 401 on invalid signature
-    - Generate trace_id for incoming requests
-    - _Requirements: 8.1, 10.2_
+    - _Requirements: 8.1_
 
   - [ ] 11.3 Implement signature verification
     - Add `verify_signature()` method using SignatureVerifier
@@ -429,7 +439,7 @@ This document provides a granular, actionable implementation plan for the Multi-
 
   - [ ] 11.5 Implement event publishing to EventBus
     - Publish parsed event to EventBus topic `slack.events.*` within 100ms
-    - Include response_url and trace_id in event metadata
+    - Include response_url in event metadata
     - _Requirements: 2.1, 8.3_
 
   - [ ] 11.6 Implement async response to Slack
@@ -451,7 +461,7 @@ This document provides a granular, actionable implementation plan for the Multi-
   - [ ] 12.1 Create main docker-compose.yml
     - Define version 3.9
     - Create `agent-network` bridge network
-    - Define named volumes for postgres-data, redis-data, rabbitmq-data
+    - Define named volumes for postgres-data, redis-data, rabbitmq-data, grafana-data, prometheus-data
     - _Requirements: 11.3, 11.4_
 
   - [ ] 12.2 Configure infrastructure services
@@ -488,13 +498,19 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Set dependencies on agent-orchestrator
     - _Requirements: 11.1, 11.5_
 
-  - [ ] 12.7 Add environment variable template
+  - [ ] 12.7 Configure monitoring services
+    - Add `prometheus` service with config volume and port 9090
+    - Add `grafana` service with dashboard volumes and port 3000
+    - Set prometheus as dependency for grafana
+    - _Requirements: 10.4_
+
+  - [ ] 12.8 Add environment variable template
     - Create `.env.example` with all required variables
     - Document each variable with comments
     - Include database, Redis, RabbitMQ, LLM API keys, Slack secrets
     - _Requirements: 9.2_
 
-  - [ ] 12.8 Test horizontal scaling
+  - [ ] 12.9 Test horizontal scaling
     - Verify `docker-compose up --scale autonomous-agent-pool=3` works correctly
     - Test load distribution across scaled instances
     - _Requirements: 11.5_
@@ -533,15 +549,13 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Create fixtures for test database, Redis, RabbitMQ
     - _Requirements: All_
 
-  - [ ] 14.2 Test Slack-triggered agent flow with trace_id
+  - [ ] 14.2 Test Slack-triggered agent flow
     - Send test Slack webhook to SlackGateway
-    - Verify trace_id generation and propagation
     - Verify signature validation
     - Verify event published to EventBus
     - Verify autonomous agent execution
     - Verify response sent back to Slack
-    - Verify logs contain trace_id throughout workflow
-    - _Requirements: 2.1, 8.1, 8.2, 8.3, 8.4, 10.2, 10.3_
+    - _Requirements: 2.1, 8.1, 8.2, 8.3, 8.4_
 
   - [ ] 14.3 Test scheduled agent execution
     - Configure test scheduled agent with short interval
@@ -593,12 +607,12 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Verify force termination after timeout
     - _Requirements: 1.4_
 
-  - [ ] 14.10 Test logging and trace_id propagation
+  - [ ] 14.10 Test monitoring and observability
     - Verify structured logs emitted by all components
-    - Verify trace_id propagation through multi-component workflows
-    - Test log filtering by trace_id using docker-compose logs
-    - Verify error logs include stack traces
-    - _Requirements: 10.1, 10.2, 10.3, 10.4_
+    - Verify trace_id propagation through workflow
+    - Verify Prometheus metrics collected
+    - Test alert triggering on failure thresholds
+    - _Requirements: 10.1, 10.2, 10.3, 10.5_
 
 - [ ] **15. Documentation and Deployment**
   - [ ] 15.1 Create comprehensive README.md
@@ -606,13 +620,13 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Document prerequisites (Docker, docker-compose)
     - Add quick start guide
     - Document environment variables
-    - Add troubleshooting section including log viewing
+    - Add troubleshooting section
     - _Requirements: All_
 
   - [ ] 15.2 Create deployment guide
     - Document production deployment steps
     - Add security hardening recommendations (TLS, secrets management)
-    - Document log viewing and analysis with docker-compose
+    - Document monitoring and alerting setup
     - Add backup and disaster recovery procedures
     - _Requirements: All_
 
@@ -621,13 +635,12 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Provide YAML configuration examples
     - Document tool integration with Portia AI
     - Add best practices for agent design
-    - Include logging best practices with trace_id
     - _Requirements: 12.1, 12.2, 12.3_
 
   - [ ] 15.4 Create operational runbook
     - Document common operational tasks
     - Add scaling guide for agent pools
-    - Document log analysis and debugging with trace_id
+    - Document log analysis and debugging
     - Add performance tuning recommendations
     - _Requirements: 11.5_
 
@@ -635,39 +648,26 @@ This document provides a granular, actionable implementation plan for the Multi-
     - Deploy full stack with `docker-compose up`
     - Verify all service health checks pass
     - Test complete workflows (Slack trigger, scheduled, collaborative)
-    - Validate logs are viewable and filterable
+    - Validate monitoring dashboards display metrics
     - _Requirements: 11.1, 11.2_
 
 ---
 
 ## Summary
 
-This simplified implementation plan contains **15 major phases** with **125 granular tasks** covering:
+This implementation plan contains **15 major phases** with **143 granular tasks** covering:
 - Infrastructure setup (Docker, databases, message broker)
-- Core service implementation (9 components + logging utility)
+- Core service implementation (10 components)
 - Integration testing (10 test suites)
 - Documentation and deployment
 
-**Removed from original plan**:
-- Prometheus metrics collection (~10 tasks)
-- Grafana dashboards (~4 tasks)
-- Advanced alerting (~4 tasks)
-- MonitoringCollector as separate service
-
-**Kept for future consideration**:
-- Centralized monitoring infrastructure
-- Log aggregation platforms
-- Real-time metrics and alerting
-- Performance analytics dashboards
+Each task references specific requirements and includes clear deliverables with file paths.
 
 ## Estimated Timeline
 
 - **Week 1-2**: Infrastructure and Core Services (Tasks 1-5)
-- **Week 3**: Orchestration Layer (Task 6)
+- **Week 3**: Orchestration Layer (Tasks 6)
 - **Week 4-5**: Agent Pools (Tasks 7-9)
 - **Week 6**: Integrations (Tasks 10-11)
 - **Week 7**: Deployment and Testing (Tasks 12-14)
 - **Week 8**: Documentation and Production Readiness (Task 15)
-
-**Total**: 125 tasks (down from 143 tasks)
-**Coverage**: All 56 acceptance criteria
