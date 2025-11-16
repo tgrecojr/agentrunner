@@ -43,6 +43,7 @@ Build a scalable, event-driven multi-agent orchestration platform in Python that
 | **ContinuousAgentRunner** | Manages long-running agents that process events continuously from dedicated queues |
 | **StateManager** | Persists agent state, conversation history, and execution results using Redis (cache) and PostgreSQL (durable storage) |
 | **ConfigurationService** | Loads and validates agent configurations, credentials, and environment-specific settings at startup |
+| **LLMProviderFactory** | Creates and manages pluggable LLM provider instances (Bedrock, OpenAI, Anthropic, Ollama) based on agent configuration |
 
 ## 4. High-Level Data Flow
 
@@ -104,7 +105,11 @@ graph TD
 
 ### External Integrations
 - **Slack API**: Incoming webhooks (HTTPS POST) and outgoing responses via `slack_sdk.webhook.WebhookClient`
-- **LLM Providers**: Portia AI connects to OpenAI, Anthropic, and other providers via HTTP APIs with credential management
+- **LLM Providers**: Pluggable architecture supporting AWS Bedrock, OpenAI, Anthropic, and Ollama (local models) via abstraction layer
+  - **AWS Bedrock**: boto3 SDK with IAM authentication for Claude, Llama, Titan models
+  - **OpenAI**: openai SDK for GPT-4, GPT-3.5 models
+  - **Anthropic**: anthropic SDK for direct Claude API access
+  - **Ollama**: Local models (Llama, Mistral) via HTTP API
 - **MCP Servers**: Portia AI integrates with Model Context Protocol servers for tool discovery and execution
 
 ### Data Formats
@@ -117,7 +122,11 @@ graph TD
 - **Slack Webhooks**: HMAC signature verification using `slack_sdk.signature.SignatureVerifier`
 - **EventBus**: RabbitMQ username/password authentication with TLS for production
 - **StateManager**: Redis AUTH and PostgreSQL role-based access control
-- **LLM API Keys**: Stored in environment variables, injected into Portia AI agents at runtime
+- **LLM Provider Credentials**:
+  - AWS Bedrock: IAM role-based authentication (access key/secret or instance profile)
+  - OpenAI: API key authentication
+  - Anthropic: API key authentication
+  - Ollama: Local HTTP connection (no authentication required)
 
 ### Docker Compose Orchestration
 - **Service Dependencies**: ConfigurationService and StateManager start first; EventBus and SchedulerService next; Agent pools last

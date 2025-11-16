@@ -2,15 +2,17 @@
 
 ## Overview
 
-This document captures the advanced monitoring and observability infrastructure that was deferred from the initial implementation (Version 1.1) to keep the system simpler and faster to deploy. The initial version uses structured JSON logging with trace IDs, which provides sufficient observability for debugging and request correlation.
+This document captures advanced monitoring and observability infrastructure that was deferred from the initial implementation (Version 1.2) to keep the system simpler and faster to deploy. The initial version uses structured JSON logging with trace IDs, which provides sufficient observability for debugging and request correlation.
 
 This document preserves the complete design and implementation plan for when the system is ready to scale to production with centralized monitoring, metrics collection, and advanced alerting.
 
+**Note**: Pluggable LLM provider support was originally planned for this section but has been included in the main specification (Version 1.2) as Requirement 13. See the design document for the LLMProviderFactory component specification.
+
 ---
 
-## What Was Deferred
+## Deferred Capabilities
 
-The following capabilities were removed from the initial implementation:
+The following monitoring and observability capabilities were removed from the initial implementation to simplify deployment:
 
 - **MonitoringCollector Component**: Centralized metrics collection and aggregation service
 - **Prometheus Integration**: Time-series metrics database with scraping endpoints
@@ -767,7 +769,7 @@ If Prometheus/Grafana is not preferred, consider these alternatives:
 
 ## Summary
 
-This document preserves the complete design for advanced monitoring infrastructure that was deferred from Version 1.1. When the system is ready to scale to production, this document provides:
+This document preserves the complete design for advanced monitoring infrastructure that was deferred from Version 1.2. When the system is ready to scale to production, this document provides:
 
 - Complete component specification for `MonitoringCollector`
 - 7 implementation tasks with file paths and requirements traceability
@@ -776,7 +778,12 @@ This document preserves the complete design for advanced monitoring infrastructu
 - Migration path from simple logging to full observability
 - Alternative monitoring solutions for different operational needs
 
-**Current State**: Version 1.1 uses `StructuredLogger` utility with trace IDs
-**Future State**: Full observability with Prometheus metrics, Grafana dashboards, and proactive alerting
+**Current State (Version 1.2)**:
+- StructuredLogger utility with trace IDs for observability
+- Pluggable LLM provider architecture (AWS Bedrock, OpenAI, Anthropic, Ollama) - **Implemented in main spec**
+
+**Future State (After Monitoring Enhancement)**:
+- Full observability with Prometheus metrics, Grafana dashboards, and proactive alerting
+- Centralized log aggregation and distributed tracing
 
 **Estimated Implementation Effort**: 5-6 weeks (part-time) or 3-4 weeks (full-time)

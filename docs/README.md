@@ -96,6 +96,8 @@ This directory contains the complete architectural specification for a Python-ba
 - ✅ **Event-driven architecture** via RabbitMQ with at-least-once delivery
 - ✅ **Slack integration** with webhook triggers
 - ✅ **Configuration-only** agent additions (no code changes required)
+- ✅ **Pluggable LLM providers** - AWS Bedrock, OpenAI, Anthropic, Ollama (local models)
+- ✅ **Per-agent provider selection** for cost optimization and flexibility
 - ✅ **Horizontal scaling** via docker-compose
 - ✅ **State persistence** with crash recovery (Redis + PostgreSQL)
 - ✅ **Structured logging** with trace IDs for debugging and request correlation
@@ -110,6 +112,7 @@ This directory contains the complete architectural specification for a Python-ba
 7. **ContinuousAgentRunner** - Long-running event processors
 8. **StateManager** - Tiered storage (Redis + PostgreSQL)
 9. **ConfigurationService** - YAML-based agent definitions
+10. **LLMProviderFactory** - Pluggable LLM provider abstraction (Bedrock, OpenAI, Anthropic, Ollama)
 
 ### Utilities
 - **StructuredLogger** - JSON logging to stdout with trace_id support
@@ -118,15 +121,15 @@ This directory contains the complete architectural specification for a Python-ba
 
 ## 📊 Specification Statistics
 
-- **Requirements**: 12
-- **Acceptance Criteria**: 56 (simplified from 60)
-- **Implementation Tasks**: 125 (simplified from 143)
-- **Components**: 9 (plus logging utility)
+- **Requirements**: 13
+- **Acceptance Criteria**: 61
+- **Implementation Tasks**: 135
+- **Components**: 10 (plus logging utility)
+- **LLM Providers Supported**: 4 (AWS Bedrock, OpenAI, Anthropic, Ollama)
 - **Integration Tests**: 10
 - **Coverage**: 100%
-- **Estimated Timeline**: 8 weeks
+- **Estimated Timeline**: 9-10 weeks
 - **Verified Sources**: 7
-- **Simplification**: Removed Prometheus/Grafana (18 fewer tasks)
 
 ---
 
@@ -267,15 +270,26 @@ For questions or clarifications about this specification:
 
 ---
 
-**Specification Version**: 1.1 (Simplified Monitoring)
+**Specification Version**: 1.2 (Pluggable LLM Providers)
 **Date**: 2025-01-16
 **Status**: Ready for Implementation ✅
 
-## Changes in Version 1.1
+## Version History
+
+### Version 1.2 (Current)
+- **Added**: Pluggable LLM Provider architecture (Requirement 13)
+  - Support for AWS Bedrock, OpenAI, Anthropic, and Ollama
+  - LLMProviderFactory component for provider abstraction
+  - Per-agent provider selection via configuration
+  - Cost tracking and token usage monitoring
+  - Standardized exception handling and retry logic
+- **Updated**: 10 core components (added LLMProviderFactory)
+- **Updated**: 135 implementation tasks (added 10 for LLM providers)
+- **Updated**: 61 acceptance criteria (added 5 for LLM provider support)
+- **Timeline**: 9-10 weeks
+
+### Version 1.1
 - Simplified monitoring from Prometheus/Grafana to structured logging with trace IDs
-- Reduced from 10 to 9 core components (MonitoringCollector removed)
-- Reduced from 143 to 125 implementation tasks (18 fewer)
-- Reduced from 60 to 56 acceptance criteria (logging requirements simplified)
+- Removed MonitoringCollector component
 - Added StructuredLogger utility for JSON logging to stdout
-- Created dedicated [06-future-considerations.md](./06-future-considerations.md) for deferred monitoring features
-- Benefits: Faster initial implementation, lower infrastructure complexity, simpler debugging
+- Created dedicated future-considerations document for deferred monitoring features

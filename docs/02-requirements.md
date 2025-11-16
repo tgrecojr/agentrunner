@@ -26,7 +26,7 @@ This document specifies the functional and non-functional requirements for the M
 
 1.1. WHEN the system starts, THE **AgentOrchestrator** SHALL load agent configurations from the **ConfigurationService** and register all agents with their metadata (id, type, capabilities, execution_mode) in the agent registry.
 
-1.2. WHEN an agent is registered, THE **AgentOrchestrator** SHALL validate that the agent configuration includes required fields (name, type, execution_mode, llm_provider) and reject invalid configurations with descriptive error messages.
+1.2. WHEN an agent is registered, THE **AgentOrchestrator** SHALL validate that the agent configuration includes required fields (name, type, execution_mode, llm_config) and reject invalid configurations with descriptive error messages.
 
 1.3. WHEN an agent initialization fails, THE **AgentOrchestrator** SHALL log the failure to stdout with error details (including trace_id) and mark the agent as unavailable in the registry.
 
@@ -170,7 +170,7 @@ This document specifies the functional and non-functional requirements for the M
 
 9.1. WHEN the **ConfigurationService** starts, THE service SHALL load agent definitions from YAML files in the `config/agents/` directory and validate the schema against required fields (name, type, execution_mode, llm_config).
 
-9.2. WHEN the **ConfigurationService** loads secrets, THE service SHALL read LLM API keys, database credentials, and RabbitMQ passwords from environment variables using `python-dotenv` and reject startup if required secrets are missing.
+9.2. WHEN the **ConfigurationService** loads secrets, THE service SHALL read AWS Bedrock credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION), database credentials, and RabbitMQ passwords from environment variables using `python-dotenv` and reject startup if required secrets are missing.
 
 9.3. WHEN the **ConfigurationService** detects a configuration file change, THE service SHALL reload the configuration and notify the **AgentOrchestrator** to update agent registrations without requiring a full system restart.
 
@@ -235,16 +235,33 @@ This document specifies the functional and non-functional requirements for the M
 
 ---
 
+### Requirement 13: Pluggable LLM Provider Support
+
+**Description**: The system SHALL support multiple LLM providers (AWS Bedrock, OpenAI, Anthropic, Ollama) through an abstraction layer, allowing each agent to specify its preferred provider and model via configuration.
+
+#### Acceptance Criteria
+
+13.1. WHEN the **LLMProviderFactory** initializes, THE factory SHALL register provider implementations for AWS Bedrock, OpenAI, Anthropic, and Ollama with standardized interfaces for completion, streaming, token counting, and cost calculation.
+
+13.2. WHEN an agent configuration specifies an llm_config with provider type, THE **LLMProviderFactory** SHALL instantiate the appropriate provider (BedrockProvider, OpenAIProvider, AnthropicProvider, or OllamaProvider) with credentials from the **ConfigurationService**.
+
+13.3. WHEN a provider invocation fails due to rate limits or service unavailability, THE provider SHALL raise a standardized exception (LLMRateLimitError, LLMServiceUnavailableError) and THE agent pool SHALL implement retry logic with exponential backoff up to 3 attempts.
+
+13.4. WHEN an agent executes with a specific LLM provider, THE provider SHALL track token usage (input and output tokens) and calculate costs based on provider-specific pricing, storing this metadata in the **StateManager** for cost analysis.
+
+13.5. WHEN multiple agents use different LLM providers simultaneously, THE system SHALL support concurrent provider usage without conflicts, allowing Agent A to use Bedrock while Agent B uses Ollama for the same task type.
+
+---
+
 ## Summary
 
-This requirements document defines **12 core requirements** with **56 acceptance criteria** mapped to the 9 system components from the architectural blueprint. Each acceptance criterion is testable and references the specific component responsible for implementation.
+This requirements document defines **13 core requirements** with **61 acceptance criteria** mapped to the 10 system components from the architectural blueprint. Each acceptance criterion is testable and references the specific component responsible for implementation.
 
 ## Future Enhancements
 
 Advanced monitoring and observability features (Prometheus, Grafana, centralized logging, distributed tracing) are deferred to future implementation phases. See **[06-future-considerations.md](./06-future-considerations.md)** for complete specifications, including:
-- Original Requirement 10 (Monitoring and Observability) with 5 acceptance criteria
 - MonitoringCollector component design
 - Prometheus and Grafana configuration
 - Implementation tasks and migration path
 
-For the initial implementation (Version 1.1), basic structured logging with trace IDs provides sufficient observability for debugging and request correlation.
+For the initial implementation (Version 1.2), basic structured logging with trace IDs provides sufficient observability for debugging and request correlation.

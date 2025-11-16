@@ -389,8 +389,9 @@ execution_mode: "autonomous"
 description: "Analyzes sentiment of customer feedback"
 
 llm_config:
-  provider: "openai"
-  model: "gpt-4"
+  provider: "bedrock"
+  model_id: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  region: "us-east-1"
   temperature: 0.7
   max_tokens: 1000
 
@@ -409,9 +410,11 @@ event_subscriptions:
 
 **Environment Variables** (Req 9.2):
 ```bash
-# LLM API Keys
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+# AWS Bedrock Configuration
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
 
 # Database credentials
 POSTGRES_URL=postgresql://user:pass@postgres:5432/agents
@@ -426,6 +429,261 @@ SLACK_BOT_TOKEN=xoxb-...
 ```
 
 **Dependencies**: pyyaml, pydantic (for validation), python-dotenv
+
+---
+
+### Component: LLMProviderFactory
+
+**Purpose**: Provides a pluggable abstraction layer for multiple LLM providers, enabling agents to use AWS Bedrock, OpenAI, Anthropic, or Ollama interchangeably based on configuration.
+
+**Location**: `src/llm/provider_factory.py`
+
+**Interface**:
+```python
+from typing import Dict, Type
+from src.llm.providers.base import LLMProvider, LLMConfig
+
+class LLMProviderFactory:
+    """
+    Implements Req 13.1, 13.2
+    Factory for creating LLM provider instances
+    """
+
+    _providers: Dict[str, Type[LLMProvider]] = {}
+
+    @classmethod
+    def register_providers(cls):
+        """Register all available provider implementations"""
+        from src.llm.providers.bedrock_provider import BedrockProvider
+        from src.llm.providers.openai_provider import OpenAIProvider
+        from src.llm.providers.anthropic_provider import AnthropicProvider
+        from src.llm.providers.ollama_provider import OllamaProvider
+
+        cls._providers = {
+            'bedrock': BedrockProvider,
+            'openai': OpenAIProvider,
+            'anthropic': AnthropicProvider,
+            'ollama': OllamaProvider,
+        }
+
+    @classmethod
+    def create_provider(cls, config: LLMConfig) -> LLMProvider:
+        """
+        Create provider instance from configuration
+        Implements Req 13.2
+
+        Args:
+            config: LLM configuration with provider type
+
+        Returns:
+            Instantiated provider
+
+        Raises:
+            ValueError: If provider not registered
+        """
+        provider_name = config.provider.lower()
+
+        if provider_name not in cls._providers:
+            raise ValueError(
+                f"Unknown LLM provider: {provider_name}. "
+                f"Available: {list(cls._providers.keys())}"
+            )
+
+        provider_class = cls._providers[provider_name]
+        return provider_class(config)
+
+    @classmethod
+    def list_providers(cls) -> list[str]:
+        """Get list of registered provider names"""
+        return list(cls._providers.keys())
+```
+
+**Base Provider Interface** (`src/llm/providers/base.py`):
+```python
+from abc import ABC, abstractmethod
+from typing import Iterator, Dict, Any, Optional
+from dataclasses import dataclass
+
+@dataclass
+class LLMResponse:
+    """Standard response format across all providers"""
+    content: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    finish_reason: str
+    cost_usd: float
+    metadata: Dict[str, Any]
+
+@dataclass
+class LLMConfig:
+    """Provider-agnostic configuration"""
+    provider: str  # 'bedrock', 'openai', 'anthropic', 'ollama'
+    model_id: str
+    temperature: float = 0.7
+    max_tokens: int = 4096
+    credentials: Optional[Dict[str, str]] = None
+
+class LLMProvider(ABC):
+    """
+    Abstract interface for LLM providers
+    Implements Req 13.1, 13.3, 13.4
+    """
+
+    def __init__(self, config: LLMConfig):
+        self.config = config
+        self.model_id = config.model_id
+        self.temperature = config.temperature
+        self.max_tokens = config.max_tokens
+
+    @abstractmethod
+    async def complete(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> LLMResponse:
+        """
+        Generate completion for the given prompt
+        Implements Req 13.4 (token tracking and cost calculation)
+
+        Raises:
+            LLMRateLimitError: On rate limit (Req 13.3)
+            LLMServiceUnavailableError: On service unavailable (Req 13.3)
+        """
+        pass
+
+    @abstractmethod
+    async def stream(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> Iterator[str]:
+        """Stream completion tokens as they're generated"""
+        pass
+
+    @abstractmethod
+    def count_tokens(self, text: str) -> int:
+        """Count tokens in text using provider's tokenizer"""
+        pass
+
+    @abstractmethod
+    def get_cost(self, input_tokens: int, output_tokens: int) -> float:
+        """Calculate cost for token usage (Req 13.4)"""
+        pass
+```
+
+**Exception Hierarchy** (`src/llm/providers/exceptions.py`):
+```python
+class LLMProviderError(Exception):
+    """Base exception for LLM provider errors"""
+    pass
+
+class LLMRateLimitError(LLMProviderError):
+    """Raised when rate limit is exceeded (Req 13.3)"""
+    def __init__(self, retry_after: Optional[int] = None):
+        self.retry_after = retry_after
+        super().__init__(f"Rate limit exceeded. Retry after {retry_after}s")
+
+class LLMServiceUnavailableError(LLMProviderError):
+    """Raised when provider service is down (Req 13.3)"""
+    pass
+
+class LLMAuthenticationError(LLMProviderError):
+    """Raised when authentication fails"""
+    pass
+
+class LLMInvalidRequestError(LLMProviderError):
+    """Raised for invalid parameters"""
+    pass
+```
+
+**Provider Implementations**:
+
+1. **BedrockProvider** (`src/llm/providers/bedrock_provider.py`) - AWS Bedrock via boto3
+   - Supports Claude (anthropic.claude-*) and Llama (meta.llama*) models
+   - IAM authentication with access key/secret or instance profile
+   - Cost tracking: Claude Sonnet ($3/$15 per 1M tokens), Haiku ($0.25/$1.25), Llama ($0.99)
+
+2. **OpenAIProvider** (`src/llm/providers/openai_provider.py`) - OpenAI API via openai SDK
+   - Supports GPT-4, GPT-3.5, GPT-4-Turbo models
+   - API key authentication
+   - Cost tracking: GPT-4 ($30/$60 per 1M tokens), GPT-3.5 ($0.50/$1.50)
+
+3. **AnthropicProvider** (`src/llm/providers/anthropic_provider.py`) - Anthropic API via anthropic SDK
+   - Direct Claude API access (claude-3-opus, claude-3-sonnet, claude-3-haiku)
+   - API key authentication
+   - Lower latency than Bedrock for Claude models
+
+4. **OllamaProvider** (`src/llm/providers/ollama_provider.py`) - Local models via Ollama HTTP API
+   - Supports Llama3, Mistral, CodeLlama, and other local models
+   - No authentication (local HTTP connection)
+   - Zero cost for inference
+
+**Configuration Example**:
+```yaml
+# config/agents/multi-provider-example.yaml
+
+# Research agent using Bedrock Claude for complex analysis
+research_agent:
+  name: "Research Agent"
+  execution_mode: "autonomous"
+  llm_config:
+    provider: "bedrock"
+    model_id: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    temperature: 0.7
+    max_tokens: 4096
+    credentials:
+      region: "${AWS_REGION}"
+      access_key_id: "${AWS_ACCESS_KEY_ID}"
+      secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+
+# Classifier using local Ollama for cost savings
+classifier_agent:
+  name: "Classifier Agent"
+  execution_mode: "autonomous"
+  llm_config:
+    provider: "ollama"
+    model_id: "llama3:70b"
+    temperature: 0.3
+    max_tokens: 1024
+    credentials:
+      base_url: "http://ollama:11434"
+
+# Creative agent using OpenAI GPT-4
+creative_agent:
+  name: "Creative Agent"
+  execution_mode: "collaborative"
+  llm_config:
+    provider: "openai"
+    model_id: "gpt-4"
+    temperature: 0.9
+    max_tokens: 2048
+    credentials:
+      api_key: "${OPENAI_API_KEY}"
+```
+
+**Environment Variables**:
+```bash
+# AWS Bedrock
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+
+# OpenAI
+OPENAI_API_KEY=sk-...
+
+# Anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Ollama (local - no credentials needed)
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+**Dependencies**: boto3, openai, anthropic, httpx (for Ollama)
+
+**Requirements**: 13.1, 13.2, 13.3, 13.4, 13.5
 
 ---
 
@@ -557,6 +815,23 @@ except Exception as e:
 **Portia AI Integration**:
 ```python
 from portia_sdk import PlanningAgent, ExecutionAgent, Plan, PlanRunState
+import boto3
+
+# Configure AWS Bedrock client
+bedrock_client = boto3.client(
+    'bedrock-runtime',
+    region_name=os.getenv('AWS_REGION', 'us-east-1'),
+    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+)
+
+llm_config = {
+    'provider': 'bedrock',
+    'client': bedrock_client,
+    'model_id': os.getenv('BEDROCK_MODEL_ID', 'anthropic.claude-3-5-sonnet-20241022-v2:0'),
+    'temperature': 0.7,
+    'max_tokens': 4096
+}
 
 planning_agent = PlanningAgent(llm_config=llm_config, tools=tool_registry)
 plan: Plan = await planning_agent.create_plan(task_description)
