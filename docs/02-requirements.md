@@ -239,13 +239,12 @@ This document specifies the functional and non-functional requirements for the M
 
 This requirements document defines **12 core requirements** with **56 acceptance criteria** mapped to the 9 system components from the architectural blueprint. Each acceptance criterion is testable and references the specific component responsible for implementation.
 
-## Future Considerations
+## Future Enhancements
 
-The following capabilities are deferred to future implementation phases:
-- **Centralized Monitoring**: Prometheus metrics collection and Grafana dashboards for real-time visualization
-- **Advanced Alerting**: Threshold-based alerts and notifications for operational issues
-- **Log Aggregation**: Centralized log collection and analysis platforms (ELK stack, Loki, etc.)
-- **Distributed Tracing Systems**: Integration with OpenTelemetry, Jaeger, or Zipkin for advanced tracing
-- **Performance Metrics**: Detailed task duration histograms, queue depth gauges, and success rate counters
+Advanced monitoring and observability features (Prometheus, Grafana, centralized logging, distributed tracing) are deferred to future implementation phases. See **[06-future-considerations.md](./06-future-considerations.md)** for complete specifications, including:
+- Original Requirement 10 (Monitoring and Observability) with 5 acceptance criteria
+- MonitoringCollector component design
+- Prometheus and Grafana configuration
+- Implementation tasks and migration path
 
-For the initial implementation, basic structured logging with trace IDs provides sufficient observability for debugging and request correlation.
+For the initial implementation (Version 1.1), basic structured logging with trace IDs provides sufficient observability for debugging and request correlation.

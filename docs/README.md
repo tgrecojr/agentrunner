@@ -57,6 +57,16 @@ This directory contains the complete architectural specification for a Python-ba
 - Risk analysis and mitigation strategies
 - Pre-implementation validation checklist
 
+### [06 - Future Considerations](./06-future-considerations.md)
+**Advanced monitoring and observability (deferred)**
+- Complete MonitoringCollector component specification
+- Original Requirement 10 with Prometheus/Grafana
+- 7 implementation tasks for full monitoring infrastructure
+- Prometheus and Grafana configuration files
+- Docker Compose integration with exporters
+- Migration path from simple logging to full observability
+- 5-6 week implementation timeline for future enhancement
+
 ---
 
 ## 🎯 Quick Start
@@ -190,6 +200,9 @@ This directory contains the complete architectural specification for a Python-ba
     ↓ (breaks down into actionable steps)
 05-validation.md
     ↓ (validates complete traceability)
+
+06-future-considerations.md (deferred features)
+    ↑ (references original monitoring design)
 ```
 
 ---
@@ -241,6 +254,7 @@ This directory contains the complete architectural specification for a Python-ba
 5. Review implementation details in [03-design.md](./03-design.md)
 6. Begin implementation following [04-tasks.md](./04-tasks.md)
 7. Validate progress against [05-validation.md](./05-validation.md)
+8. (Optional) Review [06-future-considerations.md](./06-future-considerations.md) for future monitoring enhancement
 
 ---
 
@@ -263,5 +277,5 @@ For questions or clarifications about this specification:
 - Reduced from 143 to 125 implementation tasks (18 fewer)
 - Reduced from 60 to 56 acceptance criteria (logging requirements simplified)
 - Added StructuredLogger utility for JSON logging to stdout
-- Documented Prometheus/Grafana as future enhancement
+- Created dedicated [06-future-considerations.md](./06-future-considerations.md) for deferred monitoring features
 - Benefits: Faster initial implementation, lower infrastructure complexity, simpler debugging

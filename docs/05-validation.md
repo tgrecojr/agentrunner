@@ -168,26 +168,16 @@ The following execution order ensures dependencies are met:
 
 ## 6. Changes from Original Specification
 
-### Removed Components
-- **MonitoringCollector** (as separate service) - Replaced with simple StructuredLogger utility
+This version (1.1) simplified the monitoring infrastructure to enable faster initial implementation. Advanced monitoring features are fully documented in **[06-future-considerations.md](./06-future-considerations.md)**.
 
-### Removed Features
-- Prometheus metrics collection and `/metrics` endpoints
-- Grafana dashboards and visualization
-- Advanced alerting with threshold-based triggers
-- Centralized metrics aggregation
+### Summary of Changes
+- **Removed Components**: MonitoringCollector (replaced with StructuredLogger utility)
+- **Removed Features**: Prometheus metrics, Grafana dashboards, advanced alerting
+- **Simplified Requirement 10**: Changed from "Monitoring and Observability" to "Basic Logging with Trace IDs"
+- **Tasks Reduced**: From 143 to 125 (18 fewer)
+- **Acceptance Criteria Reduced**: From 60 to 56
 
-### Simplified Features
-- **Requirement 10**: Changed from "Monitoring and Observability" to "Basic Logging with Trace IDs"
-  - Removed 10.5 (alerting requirement)
-  - Simplified 10.1-10.4 to focus on structured logging and trace_id
-
-### Added for Future Consideration
-- Centralized monitoring infrastructure (Prometheus, Grafana)
-- Log aggregation platforms (ELK stack, Loki, etc.)
-- Advanced alerting and notifications
-- Distributed tracing systems (Jaeger, Zipkin)
-- Performance metrics dashboards
+For complete specifications of deferred features, including MonitoringCollector design, Prometheus/Grafana configuration, and implementation tasks, see **[06-future-considerations.md](./06-future-considerations.md)**.
 
 ## 7. Risk Analysis and Mitigation
 
@@ -298,12 +288,12 @@ The architectural specification is **COMPLETE and VALIDATED** with simplified mo
 - Documentation complete
 
 ### Future Enhancements
-When the system is stable and running in production, consider adding:
-- Prometheus for metrics collection
-- Grafana for visualization dashboards
-- Alerting rules and notifications
-- Log aggregation platform (ELK, Loki)
-- Distributed tracing system (Jaeger, Zipkin)
+When the system is stable and running in production, advanced monitoring and observability can be added. See **[06-future-considerations.md](./06-future-considerations.md)** for complete specifications of deferred features:
+- MonitoringCollector component with Prometheus metrics
+- Grafana visualization dashboards and alert rules
+- Docker Compose integration with exporters
+- Migration path and implementation timeline (5-6 weeks)
+- Alternative monitoring solutions (Datadog, New Relic, ELK, Loki)
 
 ---
 
