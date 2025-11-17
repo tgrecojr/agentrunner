@@ -1,0 +1,85 @@
+[tool.poetry]
+name = "agentrunner"
+version = "0.1.0"
+description = "Multi-Agent Orchestration Platform with pluggable LLM providers"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+# Portia AI SDK
+portia-sdk-python = "^0.1.0"
+
+# Web framework
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+
+# Task scheduling
+celery = "^5.3.0"
+
+# Database
+sqlalchemy = "^2.0.0"
+asyncpg = "^0.29.0"
+psycopg2-binary = "^2.9.0"
+
+# Caching
+redis = "^5.0.0"
+
+# Message broker
+pika = "^1.3.0"
+
+# Slack integration
+slack-sdk = "^3.26.0"
+
+# LLM Providers
+boto3 = "^1.34.0"  # AWS Bedrock
+openai = "^1.10.0"  # OpenAI
+anthropic = "^0.18.0"  # Anthropic
+httpx = "^0.26.0"  # For Ollama
+tiktoken = "^0.6.0"  # OpenAI tokenizer
+
+# Configuration and data handling
+pyyaml = "^6.0"
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+python-dotenv = "^1.0.0"
+
+# HTTP client
+aiohttp = "^3.9.0"
+
+# Data compression
+msgpack = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.0"
+pytest-cov = "^4.1.0"
+black = "^24.0.0"
+ruff = "^0.2.0"
+mypy = "^1.8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

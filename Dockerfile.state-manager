@@ -1,0 +1,74 @@
+# ============================================
+# Multi-Agent Orchestration Platform
+# StateManager Service Dockerfile
+# ============================================
+
+# Use the base image
+FROM python:3.11-slim as base
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt requirements-dev.txt ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ============================================
+# Runtime Stage
+# ============================================
+FROM base as runtime
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./
+COPY .env.example ./.env
+
+# Create entrypoint script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "Starting StateManager Service..."\n\
+\n\
+# Wait for PostgreSQL to be ready\n\
+echo "Waiting for PostgreSQL..."\n\
+until pg_isready -h ${POSTGRES_HOST:-localhost} -p ${POSTGRES_PORT:-5432} -U ${POSTGRES_USER:-postgres}; do\n\
+  echo "PostgreSQL is unavailable - sleeping"\n\
+  sleep 1\n\
+done\n\
+echo "PostgreSQL is up!"\n\
+\n\
+# Run database migrations\n\
+echo "Running database migrations..."\n\
+alembic upgrade head\n\
+echo "Migrations complete!"\n\
+\n\
+# Start the API server\n\
+echo "Starting StateManager API server..."\n\
+exec uvicorn src.state.api:app \\\n\
+  --host ${STATE_MANAGER_HOST:-0.0.0.0} \\\n\
+  --port ${STATE_MANAGER_PORT:-8001} \\\n\
+  --workers ${API_WORKERS:-4} \\\n\
+  --log-level ${LOG_LEVEL:-info}\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+# Expose port
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:8001/health/live || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
