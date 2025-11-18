@@ -89,28 +89,6 @@ async def list_configurations() -> Dict[str, Dict]:
     }
 
 
-@app.get("/configs/{agent_name}")
-async def get_configuration(agent_name: str) -> Dict:
-    """
-    Get configuration for a specific agent.
-
-    Args:
-        agent_name: Name of the agent
-
-    Returns:
-        Agent configuration data
-    """
-    config = config_service.get_agent_config(agent_name)
-
-    if config is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Configuration for agent '{agent_name}' not found"
-        )
-
-    return config.model_dump(mode="json")
-
-
 @app.get("/configs/enabled")
 async def list_enabled_configurations() -> List[Dict]:
     """
@@ -154,6 +132,28 @@ async def list_configurations_by_mode(execution_mode: str) -> List[Dict]:
     configs = config_service.get_agents_by_execution_mode(execution_mode)
 
     return [config.model_dump(mode="json") for config in configs]
+
+
+@app.get("/configs/{agent_name}")
+async def get_configuration(agent_name: str) -> Dict:
+    """
+    Get configuration for a specific agent.
+
+    Args:
+        agent_name: Name of the agent
+
+    Returns:
+        Agent configuration data
+    """
+    config = config_service.get_agent_config(agent_name)
+
+    if config is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Configuration for agent '{agent_name}' not found"
+        )
+
+    return config.model_dump(mode="json")
 
 
 @app.get("/errors")
