@@ -1,0 +1,98 @@
+# ============================================
+# Multi-Agent Orchestration Platform
+# Scheduler Service Dockerfile
+# ============================================
+
+# Use the base image
+FROM python:3.11-slim as base
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt requirements-dev.txt ./
+
+# Install Python dependencies including Celery
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ============================================
+# Runtime Stage
+# ============================================
+FROM base as runtime
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY src/ ./src/
+COPY .env.example ./.env
+
+# Create entrypoint script for Celery Beat + Worker
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "Starting Scheduler Service..."\n\
+\n\
+# Wait for dependencies\n\
+echo "Waiting for dependencies..."\n\
+\n\
+# Wait for RabbitMQ\n\
+until curl -f http://${RABBITMQ_HOST:-rabbitmq}:15672/api/healthchecks/node 2>/dev/null; do\n\
+  echo "RabbitMQ is unavailable - sleeping"\n\
+  sleep 2\n\
+done\n\
+echo "RabbitMQ is up!"\n\
+\n\
+# Wait for Redis\n\
+until curl -f http://${REDIS_HOST:-redis}:6379/ 2>/dev/null; do\n\
+  echo "Redis is unavailable - sleeping"\n\
+  sleep 2\n\
+done\n\
+echo "Redis is up!"\n\
+\n\
+# Wait for StateManager\n\
+until curl -f http://${STATE_MANAGER_HOST:-state-manager}:${STATE_MANAGER_PORT:-8001}/health/live 2>/dev/null; do\n\
+  echo "StateManager is unavailable - sleeping"\n\
+  sleep 2\n\
+done\n\
+echo "StateManager is up!"\n\
+\n\
+# Wait for ConfigService\n\
+until curl -f http://${CONFIG_SERVICE_HOST:-config-service}:${CONFIG_SERVICE_PORT:-8002}/health/live 2>/dev/null; do\n\
+  echo "ConfigService is unavailable - sleeping"\n\
+  sleep 2\n\
+done\n\
+echo "ConfigService is up!"\n\
+\n\
+echo "All dependencies are ready!"\n\
+\n\
+# Start Scheduler Service API\n\
+echo "Starting Scheduler Service API on port 8004..."\n\
+python -m uvicorn src.scheduler.api:app --host 0.0.0.0 --port 8004 &\n\
+\n\
+# Wait for API to be ready\n\
+sleep 5\n\
+\n\
+# Start Celery Beat (scheduler)\n\
+echo "Starting Celery Beat scheduler..."\n\
+celery -A src.scheduler.scheduler_service:scheduler_service.celery_app beat --loglevel=info &\n\
+\n\
+# Start Celery Worker\n\
+echo "Starting Celery Worker..."\n\
+exec celery -A src.scheduler.scheduler_service:scheduler_service.celery_app worker --loglevel=info --concurrency=2\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+# Expose port for API
+EXPOSE 8004
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:8004/health/live || exit 1
+
+# Set entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
