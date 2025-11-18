@@ -1,0 +1,60 @@
+# ============================================
+# Customer Support Agent - Continuous Mode
+# ============================================
+# A continuous agent that handles customer support
+# tickets with persistent conversation history
+
+name: customer-support
+agent_type: support_agent
+execution_mode: continuous
+description: "AI-powered customer support agent that maintains conversation context and learns from interactions"
+
+# LLM Configuration
+llm_config:
+  provider: openai
+  model: gpt-4
+  temperature: 0.7
+  max_tokens: 2000
+
+# System Prompt
+system_prompt: |
+  You are a helpful customer support agent for our platform.
+
+  Your responsibilities:
+  - Answer customer questions clearly and professionally
+  - Escalate complex issues to human support when needed
+  - Maintain context across multiple interactions
+  - Provide accurate information about our products and services
+
+  Always be polite, empathetic, and solution-oriented.
+
+# Agent capabilities and tags
+tags:
+  - customer-support
+  - communication
+  - help-desk
+
+# Event subscriptions (what events this agent should listen to)
+event_subscriptions:
+  - "slack.command.support"
+  - "slack.event.message"
+  - "customer.ticket.created"
+  - "customer.question.submitted"
+
+# Custom tools (MCP server integration - optional)
+tools:
+  - name: knowledge_base
+    type: mcp
+    url: "https://kb.example.com/mcp"
+    description: "Search company knowledge base for solutions"
+
+  - name: ticket_system
+    type: mcp
+    url: "https://tickets.example.com/mcp"
+    description: "Create and update support tickets"
+
+# Continuous agent specific settings
+continuous_config:
+  idle_timeout_seconds: 900  # 15 minutes
+  save_interval_seconds: 180  # 3 minutes
+  max_conversation_history: 100

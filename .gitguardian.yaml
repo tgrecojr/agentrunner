@@ -1,0 +1,49 @@
+# GitGuardian Configuration
+# https://docs.gitguardian.com/internal-repositories-monitoring/configuration
+
+version: 2
+
+# Paths to exclude from scanning
+paths-ignore:
+  - .env.example        # Template file with placeholder values
+  - "**/*.md"           # Documentation files may contain example credentials
+  - "**/test_*.py"      # Test files may contain mock credentials
+  - "**/tests/**"       # Test directories
+  - docs/**             # Documentation
+  - .gitguardian.yaml   # This file
+
+# Matches to ignore (specific patterns)
+matches-ignore:
+  # Ignore placeholder passwords in .env.example
+  - name: Generic Password
+    match: CHANGE_THIS_TO_SECURE_PASSWORD
+
+  # Ignore example API keys in documentation
+  - name: Generic API Key
+    match: your_.*_api_key
+
+  - name: Generic Secret
+    match: your_.*_secret
+
+  # Ignore Slack token placeholders
+  - name: Slack Token
+    match: xoxb-your-slack-bot-token
+
+  - name: Slack Token
+    match: xapp-your-slack-app-token
+
+  # Ignore AWS credential placeholders
+  - name: AWS Access Key ID
+    match: your_aws_access_key
+
+  - name: AWS Secret Access Key
+    match: your_aws_secret_key
+
+# Minimum occurrences before triggering (reduce false positives)
+minimum-occurrences: 1
+
+# Exit code when secrets are found
+exit-zero: false
+
+# Verbose output
+verbose: false

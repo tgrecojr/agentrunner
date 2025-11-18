@@ -1,0 +1,356 @@
+version: '3.9'
+
+# ============================================
+# Multi-Agent Orchestration Platform
+# Docker Compose Configuration
+# ============================================
+
+networks:
+  agent-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
+
+services:
+  # ============================================
+  # Infrastructure Services
+  # ============================================
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: agentrunner-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agentrunner}
+      POSTGRES_USER: ${POSTGRES_USER:-agentrunner}
+      # SECURITY: POSTGRES_PASSWORD MUST be set in .env file
+      # Never use default passwords in production
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env file}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - agent-network
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentrunner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: agentrunner-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - agent-network
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: agentrunner-rabbitmq
+    environment:
+      # SECURITY: Change default credentials in production
+      # Set RABBITMQ_USER and RABBITMQ_PASSWORD in .env file
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER must be set in .env file}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set in .env file}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - agent-network
+    ports:
+      - "5672:5672"      # AMQP
+      - "15672:15672"    # Management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================
+  # Core Application Services
+  # ============================================
+
+  state-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile.state-manager
+    container_name: agentrunner-state-manager
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - agent-network
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  config-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.config-service
+    container_name: agentrunner-config-service
+    environment:
+      CONFIG_DIR: /app/config
+      STATE_MANAGER_HOST: state-manager
+      STATE_MANAGER_PORT: 8001
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    networks:
+      - agent-network
+    ports:
+      - "8002:8002"
+    depends_on:
+      state-manager:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ============================================
+  # Orchestration Layer
+  # ============================================
+
+  agent-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.orchestrator
+    container_name: agentrunner-orchestrator
+    environment:
+      CONFIG_SERVICE_HOST: config-service
+      CONFIG_SERVICE_PORT: 8002
+      STATE_MANAGER_HOST: state-manager
+      STATE_MANAGER_PORT: 8001
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672//
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    networks:
+      - agent-network
+    ports:
+      - "8003:8003"
+    depends_on:
+      state-manager:
+        condition: service_healthy
+      config-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ============================================
+  # Agent Pools
+  # ============================================
+
+  collaborative-agent-pool:
+    build:
+      context: .
+      dockerfile: Dockerfile.collaborative-pool
+    environment:
+      CONFIG_SERVICE_HOST: config-service
+      CONFIG_SERVICE_PORT: 8002
+      STATE_MANAGER_HOST: state-manager
+      STATE_MANAGER_PORT: 8001
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672//
+      ORCHESTRATOR_HOST: agent-orchestrator
+      ORCHESTRATOR_PORT: 8003
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    networks:
+      - agent-network
+    depends_on:
+      agent-orchestrator:
+        condition: service_healthy
+    restart: unless-stopped
+
+  autonomous-agent-pool:
+    build:
+      context: .
+      dockerfile: Dockerfile.autonomous-pool
+    environment:
+      CONFIG_SERVICE_HOST: config-service
+      CONFIG_SERVICE_PORT: 8002
+      STATE_MANAGER_HOST: state-manager
+      STATE_MANAGER_PORT: 8001
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672//
+      ORCHESTRATOR_HOST: agent-orchestrator
+      ORCHESTRATOR_PORT: 8003
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    networks:
+      - agent-network
+    depends_on:
+      agent-orchestrator:
+        condition: service_healthy
+    restart: unless-stopped
+    # Scale with: docker-compose up --scale autonomous-agent-pool=3
+
+  continuous-agent-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.continuous-runner
+    environment:
+      CONFIG_SERVICE_HOST: config-service
+      CONFIG_SERVICE_PORT: 8002
+      STATE_MANAGER_HOST: state-manager
+      STATE_MANAGER_PORT: 8001
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672//
+      ORCHESTRATOR_HOST: agent-orchestrator
+      ORCHESTRATOR_PORT: 8003
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - agent-network
+    depends_on:
+      agent-orchestrator:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============================================
+  # Scheduler Service
+  # ============================================
+
+  scheduler-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+    container_name: agentrunner-scheduler
+    environment:
+      CONFIG_SERVICE_HOST: config-service
+      CONFIG_SERVICE_PORT: 8002
+      STATE_MANAGER_HOST: state-manager
+      STATE_MANAGER_PORT: 8001
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672//
+      REDIS_URL: redis://redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      TASK_TIMEOUT_SECONDS: ${TASK_TIMEOUT_SECONDS:-300}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    networks:
+      - agent-network
+    ports:
+      - "8004:8004"
+    depends_on:
+      state-manager:
+        condition: service_healthy
+      config-service:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ============================================
+  # Slack Gateway
+  # ============================================
+
+  slack-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.slack-gateway
+    container_name: agentrunner-slack-gateway
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672//
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_MAX_RETRY_ATTEMPTS: ${SLACK_MAX_RETRY_ATTEMPTS:-3}
+      SLACK_RETRY_DELAY: ${SLACK_RETRY_DELAY:-1}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - agent-network
+    ports:
+      - "8005:8005"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped

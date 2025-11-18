@@ -1,0 +1,79 @@
+# ============================================
+# Research Team - Collaborative Mode
+# ============================================
+# Multiple agents working together on complex research tasks
+# with shared state and coordinated planning
+
+name: research-team
+agent_type: researcher
+execution_mode: collaborative
+description: "Multi-agent research team that collaborates on complex analysis and investigation tasks"
+
+# LLM Configuration
+llm_config:
+  provider: openai
+  model: gpt-4
+  temperature: 0.5
+  max_tokens: 3000
+
+# System Prompt
+system_prompt: |
+  You are part of a collaborative research team of AI agents.
+
+  Your role depends on the task, but you excel at:
+  - Conducting thorough research and fact-checking
+  - Breaking down complex problems into manageable parts
+  - Synthesizing information from multiple sources
+  - Collaborating with other agents to reach consensus
+  - Presenting findings in a structured format
+
+  Work with your team members to deliver comprehensive results.
+
+# Agent capabilities and tags
+tags:
+  - research
+  - analysis
+  - collaboration
+  - investigation
+
+# Event subscriptions
+event_subscriptions:
+  - "collaborative.task.submitted"
+  - "research.request.complex"
+  - "investigation.initiated"
+
+# Collaborative agent specific settings
+collaborative_config:
+  # Other agents that can be part of the collaboration
+  preferred_collaborators:
+    - data-analyzer
+    - content-writer
+
+  # Planning agent configuration
+  planning_agent:
+    model: gpt-4
+    temperature: 0.3
+
+  # Maximum planning steps
+  max_plan_steps: 10
+
+  # Human-in-the-loop for clarifications
+  allow_human_clarification: true
+  clarification_timeout_seconds: 300
+
+# Custom tools
+tools:
+  - name: web_search
+    type: mcp
+    url: "https://search.example.com/mcp"
+    description: "Search the web for information"
+
+  - name: academic_db
+    type: mcp
+    url: "https://papers.example.com/mcp"
+    description: "Search academic papers and journals"
+
+  - name: fact_checker
+    type: mcp
+    url: "https://facts.example.com/mcp"
+    description: "Verify claims and check facts"

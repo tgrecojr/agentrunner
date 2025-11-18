@@ -1,0 +1,60 @@
+# ============================================
+# Data Analyzer Agent - Autonomous Mode
+# ============================================
+# An autonomous agent that analyzes data independently
+# with no shared state between executions
+
+name: data-analyzer
+agent_type: analyst
+execution_mode: autonomous
+description: "Analyzes datasets and generates insights independently for each task"
+
+# LLM Configuration
+llm_config:
+  provider: anthropic
+  model: claude-3-sonnet-20240229
+  max_tokens: 4096
+  temperature: 0.3
+
+# System Prompt
+system_prompt: |
+  You are a data analysis expert specializing in extracting insights from structured and unstructured data.
+
+  Your capabilities:
+  - Statistical analysis and trend identification
+  - Data visualization recommendations
+  - Anomaly detection
+  - Predictive modeling suggestions
+  - Clear communication of findings
+
+  Always provide actionable insights backed by data.
+
+# Agent capabilities and tags
+tags:
+  - data-analysis
+  - analytics
+  - reporting
+
+# Event subscriptions
+event_subscriptions:
+  - "autonomous.task.submitted"
+  - "data.analysis.requested"
+  - "report.generation.requested"
+
+# Custom tools
+tools:
+  - name: data_warehouse
+    type: mcp
+    url: "https://warehouse.example.com/mcp"
+    description: "Query data warehouse for analysis"
+
+  - name: visualization_api
+    type: mcp
+    url: "https://viz.example.com/mcp"
+    description: "Generate charts and visualizations"
+
+# Autonomous agent specific settings (optional)
+retry_config:
+  max_retries: 3
+  retry_delay_seconds: 5
+  exponential_backoff: true

@@ -1,0 +1,71 @@
+# ============================================
+# Health Monitor Agent - Scheduled Mode (Interval)
+# ============================================
+# A scheduled agent that checks system health every 5 minutes
+
+name: health-monitor
+agent_type: monitor
+execution_mode: scheduled
+description: "Continuously monitors system health and alerts on issues"
+
+# LLM Configuration
+llm_config:
+  provider: anthropic
+  model: claude-3-haiku-20240307
+  max_tokens: 1000
+  temperature: 0.2
+
+# System Prompt
+system_prompt: |
+  You are a system health monitoring agent.
+
+  Your responsibilities:
+  - Check system health indicators
+  - Detect anomalies and potential issues
+  - Alert administrators of problems
+  - Recommend corrective actions
+  - Track health trends over time
+
+  Be proactive and clear in your assessments.
+
+# Agent capabilities and tags
+tags:
+  - monitoring
+  - health-check
+  - alerting
+  - scheduled
+
+# Event subscriptions
+event_subscriptions:
+  - "scheduled.task.health-check"
+  - "system.health.manual-check"
+
+# Schedule configuration - interval-based
+schedule_config:
+  type: interval
+  # Run every 5 minutes (300 seconds)
+  interval_seconds: 300
+
+  # Task data
+  task_data:
+    checks:
+      - database_health
+      - message_queue_health
+      - cache_health
+      - api_response_times
+      - error_rates
+
+  # Timeout
+  timeout_seconds: 120  # 2 minutes
+
+# Custom tools
+tools:
+  - name: health_api
+    type: mcp
+    url: "https://health.example.com/mcp"
+    description: "Query system health endpoints"
+
+  - name: alerting_service
+    type: mcp
+    url: "https://alerts.example.com/mcp"
+    description: "Send alerts to administrators"

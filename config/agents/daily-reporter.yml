@@ -1,0 +1,73 @@
+# ============================================
+# Daily Reporter Agent - Scheduled Mode
+# ============================================
+# A scheduled agent that generates daily reports
+# using Celery Beat for time-based execution
+
+name: daily-reporter
+agent_type: reporter
+execution_mode: scheduled
+description: "Generates automated daily reports on system metrics and activities"
+
+# LLM Configuration
+llm_config:
+  provider: openai
+  model: gpt-3.5-turbo
+  temperature: 0.4
+  max_tokens: 2000
+
+# System Prompt
+system_prompt: |
+  You are an automated reporting agent that generates daily summaries and insights.
+
+  Your responsibilities:
+  - Collect data from various sources
+  - Analyze trends and patterns
+  - Generate clear, actionable reports
+  - Highlight important metrics and anomalies
+  - Format reports for easy consumption
+
+  Keep reports concise but comprehensive.
+
+# Agent capabilities and tags
+tags:
+  - reporting
+  - automation
+  - analytics
+  - scheduled
+
+# Event subscriptions (scheduled agents also listen to manual triggers)
+event_subscriptions:
+  - "scheduled.task.daily-report"
+  - "report.generate.manual"
+
+# Schedule configuration
+schedule_config:
+  type: cron
+  # Run daily at 9:00 AM UTC
+  cron: "0 9 * * *"
+  timezone: UTC
+
+  # Task data to include with each execution
+  task_data:
+    report_type: daily
+    include_sections:
+      - system_health
+      - user_activity
+      - performance_metrics
+      - alerts_summary
+
+  # Timeout for task execution
+  timeout_seconds: 600  # 10 minutes
+
+# Custom tools
+tools:
+  - name: metrics_api
+    type: mcp
+    url: "https://metrics.example.com/mcp"
+    description: "Fetch system metrics and statistics"
+
+  - name: notification_service
+    type: mcp
+    url: "https://notify.example.com/mcp"
+    description: "Send report notifications to stakeholders"
